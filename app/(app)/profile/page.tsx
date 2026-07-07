@@ -7,7 +7,9 @@ import { motion } from "framer-motion";
 import { useAuth } from "@/context/AuthContext";
 import { useSettings } from "@/context/SettingsContext";
 import { dataProvider } from "@/lib/data";
-import { UserProfile } from "@/lib/types";
+import { Report, UserProfile } from "@/lib/types";
+import { computeTrustScore } from "@/lib/trust";
+import { hashContact } from "@/lib/hash";
 import TagPicker from "@/components/TagPicker";
 import { IconShield } from "@/components/icons";
 
@@ -25,6 +27,15 @@ export default function ProfilePage() {
   const [blockedProfiles, setBlockedProfiles] = useState<UserProfile[]>([]);
   const [saving, setSaving] = useState(false);
   const [verifying, setVerifying] = useState(false);
+  const [attendedOutings, setAttendedOutings] = useState(0);
+  const [trustOpen, setTrustOpen] = useState(false);
+  const [idVerifying, setIdVerifying] = useState(false);
+  const [videoVerifying, setVideoVerifying] = useState(false);
+  const [photoCheckBusy, setPhotoCheckBusy] = useState(false);
+  const [myReports, setMyReports] = useState<Report[]>([]);
+  const [reportsOpen, setReportsOpen] = useState(false);
+  const [blockContact, setBlockContact] = useState("");
+  const [blockContactBusy, setBlockContactBusy] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -40,6 +51,19 @@ export default function ProfilePage() {
     Promise.all(user.blockedUserIds.map((id) => dataProvider.getUser(id))).then((list) => {
       setBlockedProfiles(list.filter(Boolean) as UserProfile[]);
     });
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+    dataProvider.getMyOutings(user.uid).then((outings) => {
+      const count = outings.filter((o) => o.memberIds.includes(user.uid) && o.dateTime < Date.now()).length;
+      setAttendedOutings(count);
+    });
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+    dataProvider.getMyReports(user.uid).then(setMyReports);
   }, [user]);
 
   if (!user) return null;
@@ -64,6 +88,52 @@ export default function ProfilePage() {
   async function getVerified() {
     setVerifying(true);
     await dataProvider.requestVerification(user!.uid);
+    await refresh();
+  }
+
+  async function getIdVerified() {
+    setIdVerifying(true);
+    await dataProvider.requestIdVerification(user!.uid);
+    await refresh();
+  }
+
+  async function getVideoVerified() {
+    setVideoVerifying(true);
+    await dataProvider.requestVideoVerification(user!.uid);
+    await refresh();
+  }
+
+  async function runPhotoCheck() {
+    setPhotoCheckBusy(true);
+    try {
+      await dataProvider.runPhotoCheck(user!.uid);
+      await refresh();
+    } finally {
+      setPhotoCheckBusy(false);
+    }
+  }
+
+  async function addBlockedContact() {
+    if (!blockContact.trim()) return;
+    setBlockContactBusy(true);
+    try {
+      const hash = await hashContact(blockContact.trim());
+      if (!user!.blockedContactHashes.includes(hash)) {
+        await dataProvider.updateProfile(user!.uid, {
+          blockedContactHashes: [...user!.blockedContactHashes, hash],
+        });
+        await refresh();
+      }
+      setBlockContact("");
+    } finally {
+      setBlockContactBusy(false);
+    }
+  }
+
+  async function removeBlockedContact(hash: string) {
+    await dataProvider.updateProfile(user!.uid, {
+      blockedContactHashes: user!.blockedContactHashes.filter((h) => h !== hash),
+    });
     await refresh();
   }
 
@@ -147,6 +217,36 @@ export default function ProfilePage() {
           <h2 className="font-display text-sm font-bold">Safety & Trust</h2>
         </div>
 
+        {(() => {
+          const trust = computeTrustScore(user, attendedOutings);
+          return (
+            <button
+              onClick={() => setTrustOpen((o) => !o)}
+              className="mb-4 block w-full rounded-xl border border-white/10 bg-white/5 p-3 text-left"
+            >
+              <div className="mb-1.5 flex items-center justify-between">
+                <span className="text-sm font-semibold">{trust.level}</span>
+                <span className="text-xs text-white/50">{trust.score}/100</span>
+              </div>
+              <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+                <div className="h-full rounded-full bg-vibe-gradient" style={{ width: `${trust.score}%` }} />
+              </div>
+              {trustOpen && (
+                <div className="mt-3 space-y-1.5 border-t border-white/10 pt-3">
+                  {trust.breakdown.map((item) => (
+                    <div key={item.label} className="flex items-center justify-between text-xs">
+                      <span className={item.achieved ? "text-white/80" : "text-white/40"}>
+                        {item.achieved ? "✓" : "○"} {item.label}
+                      </span>
+                      <span className="text-white/40">+{item.points}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </button>
+          );
+        })()}
+
         <div className="mb-4 flex items-center justify-between">
           <div>
             <p className="text-sm font-medium">Profile verification</p>
@@ -175,6 +275,82 @@ export default function ProfilePage() {
 
         <div className="mb-4 flex items-center justify-between">
           <div>
+            <p className="text-sm font-medium">Government ID verification</p>
+            <p className="text-xs text-white/40">
+              {user.idVerificationStatus === "verified"
+                ? "Highly Trusted tier unlocked"
+                : user.idVerificationStatus === "pending"
+                ? "Review in progress..."
+                : "Upload a government ID for the highest trust tier"}
+            </p>
+          </div>
+          {user.idVerificationStatus === "none" && (
+            <button
+              onClick={getIdVerified}
+              disabled={idVerifying}
+              className="rounded-full bg-vibe-gradient px-4 py-2 text-xs font-semibold"
+            >
+              Verify
+            </button>
+          )}
+          {user.idVerificationStatus === "pending" && (
+            <div className="h-5 w-5 animate-spin rounded-full border-2 border-white/20 border-t-vibe-coral" />
+          )}
+          {user.idVerificationStatus === "verified" && <span className="text-lg">🪪</span>}
+        </div>
+
+        <div className="mb-4 flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium">Video verification</p>
+            <p className="text-xs text-white/40">
+              {user.videoVerificationStatus === "verified"
+                ? "Your video was reviewed and matches your photos"
+                : user.videoVerificationStatus === "pending"
+                ? "Review in progress..."
+                : "Record a short video to prove you're really you"}
+            </p>
+          </div>
+          {user.videoVerificationStatus === "none" && (
+            <button
+              onClick={getVideoVerified}
+              disabled={videoVerifying}
+              className="rounded-full bg-vibe-gradient px-4 py-2 text-xs font-semibold"
+            >
+              Record
+            </button>
+          )}
+          {user.videoVerificationStatus === "pending" && (
+            <div className="h-5 w-5 animate-spin rounded-full border-2 border-white/20 border-t-vibe-coral" />
+          )}
+          {user.videoVerificationStatus === "verified" && <span className="text-lg">🎥</span>}
+        </div>
+
+        <div className="mb-4 flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium">Photo authenticity check</p>
+            <p className="text-xs text-white/40">
+              {user.photoCheckStatus === "clear"
+                ? "Your photos passed our automated check"
+                : user.photoCheckStatus === "flagged"
+                ? "One or more photos need a second look"
+                : "Heuristic scan for stock/stolen photos (not a guarantee)"}
+            </p>
+          </div>
+          {!user.photoCheckStatus && (
+            <button
+              onClick={runPhotoCheck}
+              disabled={photoCheckBusy}
+              className="rounded-full border border-white/15 bg-white/5 px-4 py-2 text-xs font-semibold disabled:opacity-50"
+            >
+              Scan
+            </button>
+          )}
+          {user.photoCheckStatus === "clear" && <span className="text-lg">🛡️</span>}
+          {user.photoCheckStatus === "flagged" && <span className="text-lg">⚠️</span>}
+        </div>
+
+        <div className="mb-4 flex items-center justify-between">
+          <div>
             <p className="text-sm font-medium">Low-data mode</p>
             <p className="text-xs text-white/40">Lighter images, fewer animations - great for slower networks</p>
           </div>
@@ -186,10 +362,58 @@ export default function ProfilePage() {
           </button>
         </div>
 
+        <div className="mb-4 flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium">Read receipts</p>
+            <p className="text-xs text-white/40">Let matches see when you&apos;ve read their messages (mutual - you&apos;ll see theirs too)</p>
+          </div>
+          <button
+            onClick={async () => {
+              await dataProvider.updateProfile(user.uid, { readReceiptsEnabled: !user.readReceiptsEnabled });
+              await refresh();
+            }}
+            className={`h-6 w-11 shrink-0 rounded-full p-0.5 transition-colors ${user.readReceiptsEnabled ? "bg-vibe-gradient" : "bg-white/15"}`}
+          >
+            <motion.div layout className="h-5 w-5 rounded-full bg-white" style={{ marginLeft: user.readReceiptsEnabled ? "auto" : 0 }} />
+          </button>
+        </div>
+
+        {myReports.length > 0 && (
+          <div className="mb-4 border-t border-white/10 pt-3">
+            <button
+              onClick={() => setReportsOpen((o) => !o)}
+              className="flex w-full items-center justify-between text-left"
+            >
+              <p className="text-sm font-medium">My reports ({myReports.length})</p>
+              <span className="text-xs text-white/40">{reportsOpen ? "Hide" : "Show"}</span>
+            </button>
+            {reportsOpen && (
+              <div className="mt-2 space-y-2">
+                {myReports.map((r) => (
+                  <div key={r.id} className="flex items-center justify-between rounded-xl bg-white/5 px-3 py-2 text-xs">
+                    <span className="text-white/60">{r.reason}</span>
+                    <span
+                      className={`shrink-0 rounded-full px-2 py-0.5 font-semibold ${
+                        r.status === "resolved"
+                          ? "bg-green-400/15 text-green-300"
+                          : r.status === "reviewing"
+                          ? "bg-vibe-orange/15 text-vibe-orange"
+                          : "bg-white/10 text-white/50"
+                      }`}
+                    >
+                      {r.status === "open" ? "Received" : r.status === "reviewing" ? "In review" : "Resolved"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         <div className="space-y-2 border-t border-white/10 pt-3">
           <p className="text-sm font-medium">Emergency contact</p>
           <p className="mb-2 text-xs text-white/40">
-            Shared only when you use "Share outing status" before meeting someone new.
+            Shared only when you use &ldquo;Share outing status&rdquo; before meeting someone new.
           </p>
           <div className="flex gap-2">
             <input
@@ -197,14 +421,14 @@ export default function ProfilePage() {
               value={emergencyName}
               disabled={!editing}
               onChange={(e) => setEmergencyName(e.target.value)}
-              className="flex-1 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-vibe-coral disabled:opacity-60"
+              className="min-w-0 flex-1 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-vibe-coral disabled:opacity-60"
             />
             <input
               placeholder="Phone"
               value={emergencyPhone}
               disabled={!editing}
               onChange={(e) => setEmergencyPhone(e.target.value)}
-              className="flex-1 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-vibe-coral disabled:opacity-60"
+              className="min-w-0 flex-1 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-vibe-coral disabled:opacity-60"
             />
           </div>
         </div>
@@ -225,6 +449,41 @@ export default function ProfilePage() {
           </div>
         </div>
       )}
+
+      <div className="mb-4 rounded-2xl border border-white/10 bg-vibe-card/70 p-4">
+        <h2 className="mb-1 font-display text-sm font-bold">Contact blocklist</h2>
+        <p className="mb-3 text-xs text-white/40">
+          Block someone by phone or email before they even sign up. We only store a one-way hash - never the raw
+          number or address.
+        </p>
+        <div className="mb-3 flex gap-2">
+          <input
+            value={blockContact}
+            onChange={(e) => setBlockContact(e.target.value)}
+            placeholder="Phone or email"
+            className="min-w-0 flex-1 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-vibe-coral"
+          />
+          <button
+            onClick={addBlockedContact}
+            disabled={blockContactBusy || !blockContact.trim()}
+            className="shrink-0 rounded-xl bg-vibe-gradient px-4 py-2 text-xs font-semibold disabled:opacity-40"
+          >
+            Block
+          </button>
+        </div>
+        {user.blockedContactHashes.length > 0 && (
+          <div className="space-y-1.5">
+            {user.blockedContactHashes.map((hash) => (
+              <div key={hash} className="flex items-center justify-between rounded-lg bg-white/5 px-3 py-1.5 text-xs">
+                <span className="font-mono text-white/40">{hash.slice(0, 12)}...</span>
+                <button onClick={() => removeBlockedContact(hash)} className="text-vibe-coral">
+                  Remove
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       <button onClick={signOut} className="w-full rounded-xl border border-white/10 py-3 text-sm text-white/50">
         Sign out

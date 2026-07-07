@@ -15,6 +15,11 @@ const ICON: Record<NotificationType, string> = {
   outing_request_rejected: "😔",
   new_message: "💬",
   safety_checkin: "🛡️",
+  outing_reminder: "⏰",
+  reconnect_match: "🔁",
+  outing_cancelled: "🚫",
+  outing_rating_prompt: "⭐",
+  sos_alert: "🆘",
 };
 
 export default function NotificationsPage() {

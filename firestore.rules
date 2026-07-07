@@ -55,13 +55,83 @@ service cloud.firestore {
       match /messages/{messageId} {
         allow read: if isSignedIn() && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.memberIds;
         allow create: if isSignedIn() && request.resource.data.senderId == request.auth.uid;
-        allow update, delete: if false;
+        // Read receipts (readBy) and pin-toggling both update an existing message;
+        // scoped to chat members (validated more tightly in Cloud Functions in a production build).
+        allow update: if isSignedIn() && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.memberIds;
+        allow delete: if false;
       }
     }
 
     match /reports/{reportId} {
-      allow read: if false; // admin/back-office only, read via Firebase console or a Cloud Function
+      // Reporter can see the status of their own report; reports filed against you stay hidden.
+      allow read: if isSignedIn() && request.auth.uid == resource.data.reporterId;
       allow create: if isSignedIn() && request.resource.data.reporterId == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    // Ephemeral typing indicator, doc id `${chatId}_${uid}`.
+    match /typing/{typingId} {
+      allow read: if isSignedIn();
+      allow create, update: if isSelf(request.resource.data.uid)
+        && request.auth.uid in get(/databases/$(database)/documents/chats/$(request.resource.data.chatId)).data.memberIds;
+      // `resource == null` covers deleting a doc that already expired/was never created.
+      allow delete: if resource == null || isSelf(resource.data.uid);
+    }
+
+    // Outing-logistics polls, posted into the outing's group chat.
+    match /polls/{pollId} {
+      allow read: if isSignedIn() && request.auth.uid in get(/databases/$(database)/documents/chats/$(resource.data.chatId)).data.memberIds;
+      allow create: if isSignedIn() && request.auth.uid in get(/databases/$(database)/documents/chats/$(request.resource.data.chatId)).data.memberIds;
+      // Voting rewrites the whole `options` array; scoped to chat members.
+      allow update: if isSignedIn() && request.auth.uid in get(/databases/$(database)/documents/chats/$(resource.data.chatId)).data.memberIds;
+      allow delete: if false;
+    }
+
+    // Split-the-bill entries for an outing.
+    match /expenses/{expenseId} {
+      allow read: if isSignedIn() && request.auth.uid in get(/databases/$(database)/documents/outings/$(resource.data.outingId)).data.memberIds;
+      allow create: if isSignedIn()
+        && request.resource.data.paidBy == request.auth.uid
+        && request.auth.uid in get(/databases/$(database)/documents/outings/$(request.resource.data.outingId)).data.memberIds;
+      allow update, delete: if false;
+    }
+
+    // Post-outing venue/vibe ratings, doc id `${outingId}_${uid}`.
+    match /ratings/{ratingId} {
+      // Broad read so leader reputation can be aggregated across all of a leader's outings.
+      allow read: if isSignedIn();
+      allow create, update: if isSelf(request.resource.data.uid)
+        && request.auth.uid in get(/databases/$(database)/documents/outings/$(request.resource.data.outingId)).data.memberIds;
+      allow delete: if false;
+    }
+
+    // Time-boxed live location shares, doc id `${outingId}_${uid}`. GPS is sensitive,
+    // so both read and write are scoped to members of that specific outing.
+    // `resource == null` covers the common case of checking/clearing a share that
+    // was never created or already expired - there's nothing sensitive to protect there.
+    match /liveLocations/{shareId} {
+      allow read: if resource == null || (isSignedIn() && request.auth.uid in get(/databases/$(database)/documents/outings/$(resource.data.outingId)).data.memberIds);
+      allow create, update: if isSelf(request.resource.data.uid)
+        && request.auth.uid in get(/databases/$(database)/documents/outings/$(request.resource.data.outingId)).data.memberIds;
+      allow delete: if resource == null || isSelf(resource.data.uid);
+    }
+
+    // Safety check-ins (incl. SOS), doc id `${outingId}_${uid}`. Emergency-contact info
+    // is sensitive - only the checking-in user ever reads/writes their own doc.
+    // `resource == null` covers checking a checkin that hasn't been started yet.
+    match /safetyCheckins/{checkinId} {
+      allow read: if resource == null || isSelf(resource.data.uid);
+      allow create, update: if isSelf(request.resource.data.uid);
+      allow delete: if false;
+    }
+
+    // Post-outing "vibe check" reconnect picks, doc id `${outingId}_${fromUid}_${toUid}`.
+    match /reconnectPicks/{pickId} {
+      // A doc only ever reveals one specific pairing (you picked them, or they picked you) -
+      // never a third party's picks - so this can't be used to snoop on others. `resource == null`
+      // covers checking whether the other person has reciprocated yet (they may not have).
+      allow read: if resource == null || (isSignedIn() && (request.auth.uid == resource.data.fromUid || request.auth.uid == resource.data.toUid));
+      allow create: if isSelf(request.resource.data.fromUid);
       allow update, delete: if false;
     }
   }

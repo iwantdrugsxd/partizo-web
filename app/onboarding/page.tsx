@@ -7,15 +7,16 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useAuth } from "@/context/AuthContext";
 import { dataProvider } from "@/lib/data";
 import { MIN_TAGS } from "@/data/tags";
-import { QuizAnswer, UserProfile } from "@/lib/types";
+import { PROMPT_BANK, PROMPT_COUNT } from "@/data/prompts";
+import { ProfilePrompt, QuizAnswer, UserProfile } from "@/lib/types";
 import { computeTraitsFromAnswers, personalityLabel } from "@/lib/vibe";
 import AnimatedBackground from "@/components/AnimatedBackground";
 import TagPicker from "@/components/TagPicker";
 import VibeQuiz from "@/components/VibeQuiz";
 
-type Step = "basics" | "photos" | "tags" | "quiz" | "done";
+type Step = "basics" | "photos" | "tags" | "prompts" | "quiz" | "done";
 
-const STEP_ORDER: Step[] = ["basics", "photos", "tags", "quiz", "done"];
+const STEP_ORDER: Step[] = ["basics", "photos", "tags", "prompts", "quiz", "done"];
 
 export default function OnboardingPage() {
   const { user, refresh } = useAuth();
@@ -30,6 +31,7 @@ export default function OnboardingPage() {
   const [bio, setBio] = useState("");
   const [photos, setPhotos] = useState<string[]>([]);
   const [tags, setTags] = useState<string[]>([]);
+  const [prompts, setPrompts] = useState<ProfilePrompt[]>([]);
   const [quizAnswers, setQuizAnswers] = useState<QuizAnswer[] | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -69,6 +71,7 @@ export default function OnboardingPage() {
         bio,
         photos: photos.length ? photos : ["https://i.pravatar.cc/600?img=68"],
         tags,
+        prompts,
         quizAnswers: answers,
       });
       await refresh();
@@ -93,7 +96,7 @@ export default function OnboardingPage() {
           ← Back
         </button>
         <p className="text-xs font-medium uppercase tracking-widest text-white/40">
-          Step {Math.min(stepIndex + 1, 4)} of 4
+          Step {Math.min(stepIndex + 1, 5)} of 5
         </p>
       </div>
 
@@ -106,7 +109,7 @@ export default function OnboardingPage() {
             exit={{ opacity: 0, x: -30 }}
           >
             <h2 className="mb-1 font-display text-2xl font-bold">Tell us about you</h2>
-            <p className="mb-6 text-sm text-white/50">This is how you'll show up on your card.</p>
+            <p className="mb-6 text-sm text-white/50">This is how you&apos;ll show up on your card.</p>
 
             <div className="space-y-4">
               <div>
@@ -118,7 +121,7 @@ export default function OnboardingPage() {
                 />
               </div>
               <div className="flex gap-3">
-                <div className="flex-1">
+                <div className="min-w-0 flex-1">
                   <label className="mb-1 block text-xs font-medium text-white/50">Age</label>
                   <input
                     type="number"
@@ -129,7 +132,7 @@ export default function OnboardingPage() {
                     className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm outline-none focus:border-vibe-coral"
                   />
                 </div>
-                <div className="flex-1">
+                <div className="min-w-0 flex-1">
                   <label className="mb-1 block text-xs font-medium text-white/50">City</label>
                   <input
                     value={city}
@@ -255,7 +258,7 @@ export default function OnboardingPage() {
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -30 }}
           >
-            <h2 className="mb-1 font-display text-2xl font-bold">What's your vibe?</h2>
+            <h2 className="mb-1 font-display text-2xl font-bold">What&apos;s your vibe?</h2>
             <p className="mb-6 text-sm text-white/50">
               Pick {MIN_TAGS}-8 tags. We use these to match you with the right crowd.
             </p>
@@ -266,6 +269,72 @@ export default function OnboardingPage() {
               className="mt-8 w-full rounded-xl bg-vibe-gradient py-3 text-sm font-semibold shadow-glow disabled:opacity-40"
             >
               Continue ({tags.length}/{MIN_TAGS} min)
+            </button>
+          </motion.div>
+        )}
+
+        {step === "prompts" && (
+          <motion.div
+            key="prompts"
+            initial={{ opacity: 0, x: 30 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -30 }}
+          >
+            <h2 className="mb-1 font-display text-2xl font-bold">Give them something to reply to</h2>
+            <p className="mb-6 text-sm text-white/50">
+              Pick {PROMPT_COUNT} prompts. These show up on your card alongside your vibe score.
+            </p>
+            <div className="space-y-4">
+              {Array.from({ length: PROMPT_COUNT }).map((_, i) => {
+                const current = prompts[i];
+                const takenIds = prompts.filter((_, j) => j !== i).map((p) => p.promptId);
+                return (
+                  <div key={i} className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                    <select
+                      value={current?.promptId ?? ""}
+                      onChange={(e) => {
+                        const promptId = e.target.value;
+                        setPrompts((prev) => {
+                          const next = [...prev];
+                          next[i] = { promptId, answer: next[i]?.answer ?? "" };
+                          return next;
+                        });
+                      }}
+                      className="mb-2 w-full rounded-lg border border-white/10 bg-vibe-card px-3 py-2 text-sm outline-none focus:border-vibe-coral"
+                    >
+                      <option value="">Choose a prompt...</option>
+                      {PROMPT_BANK.filter((p) => !takenIds.includes(p.id)).map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.text}
+                        </option>
+                      ))}
+                    </select>
+                    <textarea
+                      value={current?.answer ?? ""}
+                      disabled={!current?.promptId}
+                      onChange={(e) => {
+                        setPrompts((prev) => {
+                          const next = [...prev];
+                          next[i] = { promptId: next[i]?.promptId ?? "", answer: e.target.value };
+                          return next;
+                        });
+                      }}
+                      rows={2}
+                      placeholder="Your answer..."
+                      className="w-full rounded-lg border border-white/10 bg-vibe-card px-3 py-2 text-sm outline-none focus:border-vibe-coral disabled:opacity-40"
+                    />
+                  </div>
+                );
+              })}
+            </div>
+            <button
+              onClick={goNext}
+              disabled={
+                prompts.filter((p) => p?.promptId && p.answer.trim()).length < PROMPT_COUNT
+              }
+              className="mt-8 w-full rounded-xl bg-vibe-gradient py-3 text-sm font-semibold shadow-glow disabled:opacity-40"
+            >
+              Continue
             </button>
           </motion.div>
         )}
@@ -298,7 +367,7 @@ export default function OnboardingPage() {
             >
               ✨
             </motion.div>
-            <h2 className="mb-2 font-display text-2xl font-bold">You're a</h2>
+            <h2 className="mb-2 font-display text-2xl font-bold">You&apos;re a</h2>
             <p className="mb-6 font-display text-3xl font-extrabold text-gradient">
               {personalityLabel(previewTraits)}
             </p>

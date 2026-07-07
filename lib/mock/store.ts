@@ -4,13 +4,20 @@ import {
   AppNotification,
   ChatMessage,
   ChatMeta,
+  Expense,
+  LiveLocationShare,
   Match,
   Outing,
+  OutingPoll,
+  OutingRating,
+  ReconnectPick,
   Report,
+  SafetyCheckin,
   SwipeRecord,
   UserProfile,
 } from "@/lib/types";
 import { SEED_USERS } from "@/lib/mock/seed";
+import { coordsForCity } from "@/lib/geo";
 
 const STORAGE_KEY = "partizo_mock_db_v1";
 const SESSION_KEY = "partizo_mock_session_v1";
@@ -25,6 +32,12 @@ export interface MockDB {
   messages: Record<string, ChatMessage[]>;
   notifications: AppNotification[];
   reports: Report[];
+  safetyCheckins: SafetyCheckin[];
+  reconnectPicks: ReconnectPick[];
+  polls: OutingPoll[];
+  expenses: Expense[];
+  ratings: OutingRating[];
+  liveLocations: LiveLocationShare[];
 }
 
 function emptyDB(): MockDB {
@@ -40,6 +53,12 @@ function emptyDB(): MockDB {
     messages: {},
     notifications: [],
     reports: [],
+    safetyCheckins: [],
+    reconnectPicks: [],
+    polls: [],
+    expenses: [],
+    ratings: [],
+    liveLocations: [],
   };
 }
 
@@ -48,6 +67,49 @@ const listeners = new Map<string, Set<() => void>>();
 
 function isBrowser() {
   return typeof window !== "undefined";
+}
+
+/** Backfills fields added in later schema versions so old localStorage data doesn't crash newer code. */
+function migrate(db: MockDB): MockDB {
+  db.safetyCheckins ??= [];
+  db.reconnectPicks ??= [];
+  db.polls ??= [];
+  db.expenses ??= [];
+  db.ratings ??= [];
+  db.liveLocations ??= [];
+  for (const u of Object.values(db.users)) {
+    u.prompts ??= [];
+    u.idVerificationStatus ??= "none";
+    u.videoVerificationStatus ??= "none";
+    u.readReceiptsEnabled ??= false;
+    u.blockedContactHashes ??= [];
+    if (u.lat === undefined || u.lng === undefined) {
+      const coords = coordsForCity(u.city);
+      if (coords) {
+        u.lat = coords.lat;
+        u.lng = coords.lng;
+      }
+    }
+  }
+  for (const o of Object.values(db.outings)) {
+    o.visibility ??= "public";
+    o.invitedUserIds ??= [];
+    o.reminderSent ??= false;
+    o.reconnectSubmittedUids ??= [];
+    o.photoAlbum ??= [];
+    if ((o.lat === undefined || o.lng === undefined) && o.location) {
+      const owner = db.users[o.leaderId];
+      const coords = owner ? coordsForCity(owner.city) : null;
+      if (coords) {
+        o.lat = coords.lat;
+        o.lng = coords.lng;
+      }
+    }
+  }
+  for (const r of db.reports) {
+    r.status ??= "open";
+  }
+  return db;
 }
 
 export function loadDB(): MockDB {
@@ -59,7 +121,7 @@ export function loadDB(): MockDB {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (raw) {
-      cache = JSON.parse(raw) as MockDB;
+      cache = migrate(JSON.parse(raw) as MockDB);
       return cache;
     }
   } catch {

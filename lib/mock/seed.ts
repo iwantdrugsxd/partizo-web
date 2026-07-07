@@ -1,4 +1,5 @@
 import { UserProfile } from "@/lib/types";
+import { coordsForCity } from "@/lib/geo";
 
 const now = Date.now();
 
@@ -6,15 +7,21 @@ const base = (
   overrides: Partial<UserProfile> & Pick<UserProfile, "uid" | "name" | "age" | "gender" | "city" | "tags">
 ): UserProfile => ({
   showMePreference: "everyone",
+  ...coordsForCity(overrides.city),
   bio: "",
   photos: [],
+  prompts: [],
   traits: { extraversion: 5, adventure: 5, humor: 5, depth: 5, spontaneity: 5 },
   quizAnswers: [],
   personalityLabel: "Balanced Explorer",
   verified: false,
   verificationStatus: "none",
+  idVerificationStatus: "none",
+  videoVerificationStatus: "none",
   lowDataMode: false,
+  readReceiptsEnabled: false,
   blockedUserIds: [],
+  blockedContactHashes: [],
   onboardingComplete: true,
   createdAt: now,
   ...overrides,
@@ -29,6 +36,10 @@ export const SEED_USERS: UserProfile[] = [
     city: "Bengaluru",
     bio: "Trekking on weekends, debugging on weekdays. Chai > coffee, always.",
     photos: ["https://i.pravatar.cc/600?img=47", "https://i.pravatar.cc/600?img=48"],
+    prompts: [
+      { promptId: "sunday", answer: "Sunrise trek, then a long nap." },
+      { promptId: "chai_or_coffee", answer: "Chai, obviously. Coffee is a personality crisis." },
+    ],
     tags: ["Trekking & Treks", "Coding & Tech", "Chai Over Coffee", "Indie Music", "Photography"],
     traits: { extraversion: 6, adventure: 9, humor: 6, depth: 7, spontaneity: 7 },
     personalityLabel: "Adventurous Deep Thinker",
@@ -43,6 +54,9 @@ export const SEED_USERS: UserProfile[] = [
     city: "Mumbai",
     bio: "Standup comedy on Fridays, cricket every other day. Will roast you kindly.",
     photos: ["https://i.pravatar.cc/600?img=12"],
+    prompts: [
+      { promptId: "unpopular_opinion", answer: "Biryani debates are more intense than cricket debates." },
+    ],
     tags: ["Standup Comedy", "Cricket Fanatic", "Foodie", "Night Owl", "Live Music Gigs"],
     traits: { extraversion: 9, adventure: 5, humor: 9, depth: 4, spontaneity: 7 },
     personalityLabel: "Spontaneous Comedian",
@@ -127,6 +141,10 @@ export const SEED_USERS: UserProfile[] = [
     city: "Delhi",
     bio: "Fashion student, K-drama addict, will debate Bollywood vs K-pop with you.",
     photos: ["https://i.pravatar.cc/600?img=39"],
+    prompts: [
+      { promptId: "dream_trip", answer: "Seoul, for the street food and the fashion districts." },
+      { promptId: "hot_take_movies", answer: "A good K-drama beats a Marvel movie any day." },
+    ],
     tags: ["Fashion & Style", "K-pop / K-drama", "Bollywood Buff", "Dance", "Photography"],
     traits: { extraversion: 8, adventure: 5, humor: 7, depth: 5, spontaneity: 7 },
     personalityLabel: "Witty Extrovert",

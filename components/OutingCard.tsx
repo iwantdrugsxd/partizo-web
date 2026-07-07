@@ -13,7 +13,10 @@ interface Props {
 }
 
 export default function OutingCard({ outing, leaderName, vibeScore }: Props) {
-  const spotsLeft = outing.capacity - outing.memberIds.length;
+  const guestSeats = outing.requests
+    .filter((r) => r.status === "accepted" && outing.memberIds.includes(r.uid))
+    .reduce((sum, r) => sum + (r.guestCount ?? 0), 0);
+  const spotsLeft = outing.capacity - outing.memberIds.length - guestSeats;
 
   return (
     <Link href={`/outings/${outing.id}`}>
