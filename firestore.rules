@@ -1,0 +1,68 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    function isSelf(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    // Users can read any profile (needed for the deck / outings / chats),
+    // but only write their own.
+    match /users/{uid} {
+      allow read: if isSignedIn();
+      allow create: if isSelf(uid);
+      allow update: if isSelf(uid);
+      allow delete: if false;
+
+      match /notifications/{notifId} {
+        allow read, update: if isSelf(uid);
+        allow create: if isSignedIn(); // other users/functions can push a notification to you
+        allow delete: if isSelf(uid);
+      }
+    }
+
+    // A swipe doc id is `${fromUid}_${toUid}` - only the swiper can create it,
+    // and both parties may read (needed to detect mutual likes).
+    match /swipes/{swipeId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.fromUid == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    match /matches/{matchId} {
+      allow read: if isSignedIn() && request.auth.uid in resource.data.userIds;
+      allow create: if isSignedIn();
+      allow update, delete: if false;
+    }
+
+    match /outings/{outingId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.leaderId == request.auth.uid;
+      // Leader manages requests/status; any signed-in user may add themselves to `requests`
+      // (validated more tightly in Cloud Functions in a production build).
+      allow update: if isSignedIn();
+      allow delete: if isSignedIn() && resource.data.leaderId == request.auth.uid;
+    }
+
+    match /chats/{chatId} {
+      allow read: if isSignedIn() && request.auth.uid in resource.data.memberIds;
+      allow create: if isSignedIn();
+      allow update: if isSignedIn() && request.auth.uid in resource.data.memberIds;
+
+      match /messages/{messageId} {
+        allow read: if isSignedIn() && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.memberIds;
+        allow create: if isSignedIn() && request.resource.data.senderId == request.auth.uid;
+        allow update, delete: if false;
+      }
+    }
+
+    match /reports/{reportId} {
+      allow read: if false; // admin/back-office only, read via Firebase console or a Cloud Function
+      allow create: if isSignedIn() && request.resource.data.reporterId == request.auth.uid;
+      allow update, delete: if false;
+    }
+  }
+}
