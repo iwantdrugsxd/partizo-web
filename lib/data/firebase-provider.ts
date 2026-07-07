@@ -22,8 +22,7 @@ import {
   updateDoc,
   where,
 } from "firebase/firestore";
-import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
-import { auth, db, storage } from "@/lib/firebase";
+import { auth, db } from "@/lib/firebase";
 import {
   AppNotification,
   ChatMessage,
@@ -56,15 +55,6 @@ function requireDb() {
     );
   }
   return { db, auth };
-}
-
-function requireStorage() {
-  if (!storage) {
-    throw new Error(
-      "Firebase is not configured. Fill in .env.local with your Firebase project keys and set NEXT_PUBLIC_DATA_MODE=firebase."
-    );
-  }
-  return storage;
 }
 
 /** Client-generated id for cases where we need the id before the Firestore doc exists (e.g. a recurrence series id). */
@@ -205,10 +195,25 @@ export const firebaseProvider: DataProvider = {
     await updateDoc(doc(db, "users", uid), partial as DocumentData);
   },
 
-  async uploadPhoto(uid, file) {
-    const storageRef = ref(requireStorage(), `users/${uid}/photos/${Date.now()}-${file.name}`);
-    await uploadBytes(storageRef, file);
-    return getDownloadURL(storageRef);
+  async uploadPhoto(_uid, file) {
+    const { auth } = requireDb();
+    const idToken = await auth.currentUser?.getIdToken();
+    if (!idToken) {
+      throw new Error("You must be signed in to upload a photo.");
+    }
+    const formData = new FormData();
+    formData.append("file", file);
+    const res = await fetch("/api/upload-photo", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${idToken}` },
+      body: formData,
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}) as { error?: string });
+      throw new Error(body.error || "Upload failed");
+    }
+    const { url } = (await res.json()) as { url: string };
+    return url;
   },
 
   async completeOnboarding(uid, data: OnboardingData) {
