@@ -25,17 +25,21 @@ service cloud.firestore {
     }
 
     // A swipe doc id is `${fromUid}_${toUid}` - only the swiper can create it,
-    // and both parties may read (needed to detect mutual likes).
+    // and both parties may read (needed to detect mutual likes). Delete is needed
+    // for the "undo last swipe" feature, scoped to the original swiper only.
     match /swipes/{swipeId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn() && request.resource.data.fromUid == request.auth.uid;
-      allow update, delete: if false;
+      allow update: if false;
+      allow delete: if isSignedIn() && resource.data.fromUid == request.auth.uid;
     }
 
     match /matches/{matchId} {
       allow read: if isSignedIn() && request.auth.uid in resource.data.userIds;
       allow create: if isSignedIn();
-      allow update, delete: if false;
+      allow update: if false;
+      // "Undo last swipe" un-matches by deleting the match it just created.
+      allow delete: if isSignedIn() && request.auth.uid in resource.data.userIds;
     }
 
     match /outings/{outingId} {
@@ -51,10 +55,15 @@ service cloud.firestore {
       allow read: if isSignedIn() && request.auth.uid in resource.data.memberIds;
       allow create: if isSignedIn();
       allow update: if isSignedIn() && request.auth.uid in resource.data.memberIds;
+      // "Undo last swipe" deletes the chat it just created when un-matching.
+      allow delete: if isSignedIn() && request.auth.uid in resource.data.memberIds;
 
       match /messages/{messageId} {
         allow read: if isSignedIn() && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.memberIds;
-        allow create: if isSignedIn() && request.resource.data.senderId == request.auth.uid;
+        // Client code also writes auto-generated "system" messages (match/outing-crew
+        // welcome banners) - allowed for any member of the chat, not just senderId == self.
+        allow create: if isSignedIn() && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.memberIds
+          && (request.resource.data.senderId == request.auth.uid || request.resource.data.senderId == "system");
         // Read receipts (readBy) and pin-toggling both update an existing message;
         // scoped to chat members (validated more tightly in Cloud Functions in a production build).
         allow update: if isSignedIn() && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.memberIds;
