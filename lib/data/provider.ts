@@ -96,6 +96,7 @@ export interface DataProvider {
   getUser(uid: string): Promise<UserProfile | null>;
   updateProfile(uid: string, partial: Partial<UserProfile>): Promise<void>;
   completeOnboarding(uid: string, data: OnboardingData): Promise<void>;
+  uploadPhoto(uid: string, file: File): Promise<string>;
 
   // --- Connect / swipe ---
   getDeck(uid: string, filters?: DeckFilters): Promise<DeckCandidate[]>;

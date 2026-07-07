@@ -22,7 +22,7 @@ export default function RootPage() {
   }, [user, loading, router]);
 
   return (
-    <div className="relative flex h-screen flex-col items-center justify-center px-8 text-center">
+    <div className="relative flex h-[100dvh] flex-col items-center justify-center px-8 text-center">
       <AnimatedBackground />
       <motion.h1
         initial={{ opacity: 0, y: 20 }}

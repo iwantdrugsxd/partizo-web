@@ -10,6 +10,7 @@ import { VIBE_TAGS } from "@/data/tags";
 import { OUTING_TEMPLATES } from "@/data/outingTemplates";
 import { safeSpotsForCity } from "@/data/safeSpots";
 import { coordsForCity } from "@/lib/geo";
+import LocationSearch from "@/components/LocationSearch";
 import { IconMapPin, IconX } from "@/components/icons";
 
 const CATEGORIES = [
@@ -283,12 +284,11 @@ export default function CreateOutingModal({ open, onClose }: Props) {
               <div className="flex gap-3">
                 <div className="min-w-0 flex-1">
                   <label className="mb-1 block text-xs font-medium text-white/50">Location</label>
-                  <input
-                    required
+                  <LocationSearch
                     value={location}
-                    onChange={(e) => setLocation(e.target.value)}
-                    placeholder="Indiranagar, Bengaluru"
-                    className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm outline-none focus:border-vibe-coral"
+                    onChange={setLocation}
+                    coords={pinnedCoords}
+                    onPickCoords={setPinnedCoords}
                   />
                   {safeSpots.length > 0 && (
                     <div className="mt-2">

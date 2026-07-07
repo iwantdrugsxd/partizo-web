@@ -18,8 +18,8 @@ export default function BottomNav({ unreadCount = 0 }: { unreadCount?: number })
   const pathname = usePathname();
 
   return (
-    <nav className="absolute inset-x-0 bottom-0 z-30 border-t border-white/10 bg-vibe-ink/90 backdrop-blur-xl">
-      <div className="flex items-center justify-around px-2 py-2">
+    <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-white/10 bg-vibe-ink/90 backdrop-blur-xl">
+      <div className="mx-auto flex max-w-md items-center justify-around px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2">
         {ITEMS.map(({ href, label, icon: Icon }) => {
           const active = pathname?.startsWith(href);
           return (

@@ -32,7 +32,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="relative flex min-h-screen flex-col justify-center px-6 py-12">
+    <div className="relative flex min-h-[100dvh] flex-col justify-center px-6 py-12">
       <AnimatedBackground />
 
       <motion.div

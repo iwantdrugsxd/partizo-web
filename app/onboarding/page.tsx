@@ -7,12 +7,13 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useAuth } from "@/context/AuthContext";
 import { dataProvider } from "@/lib/data";
 import { MIN_TAGS } from "@/data/tags";
-import { PROMPT_BANK, PROMPT_COUNT } from "@/data/prompts";
+import { PROMPT_BANK, PROMPT_COUNT, promptText } from "@/data/prompts";
 import { ProfilePrompt, QuizAnswer, UserProfile } from "@/lib/types";
 import { computeTraitsFromAnswers, personalityLabel } from "@/lib/vibe";
 import AnimatedBackground from "@/components/AnimatedBackground";
 import TagPicker from "@/components/TagPicker";
 import VibeQuiz from "@/components/VibeQuiz";
+import { IconCheck, IconX } from "@/components/icons";
 
 type Step = "basics" | "photos" | "tags" | "prompts" | "quiz" | "done";
 
@@ -34,6 +35,9 @@ export default function OnboardingPage() {
   const [prompts, setPrompts] = useState<ProfilePrompt[]>([]);
   const [quizAnswers, setQuizAnswers] = useState<QuizAnswer[] | null>(null);
   const [saving, setSaving] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [photoError, setPhotoError] = useState("");
+  const [openPromptSlot, setOpenPromptSlot] = useState<number | null>(null);
 
   const stepIndex = STEP_ORDER.indexOf(step);
 
@@ -46,14 +50,20 @@ export default function OnboardingPage() {
     if (prev) setStep(prev);
   }
 
-  function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      setPhotos((p) => [...p, reader.result as string].slice(0, 4));
-    };
-    reader.readAsDataURL(file);
+    if (!file || !user) return;
+    e.target.value = "";
+    setUploadingPhoto(true);
+    setPhotoError("");
+    try {
+      const url = await dataProvider.uploadPhoto(user.uid, file);
+      setPhotos((p) => [...p, url].slice(0, 4));
+    } catch {
+      setPhotoError("Couldn't upload that photo. Please try again, or grab a demo avatar below.");
+    } finally {
+      setUploadingPhoto(false);
+    }
   }
 
   const DEMO_AVATARS = [4, 5, 9, 20, 25, 33, 36, 22];
@@ -84,7 +94,7 @@ export default function OnboardingPage() {
   const previewTraits = quizAnswers ? computeTraitsFromAnswers(quizAnswers) : null;
 
   return (
-    <div className="relative min-h-screen px-6 py-10">
+    <div className="relative min-h-[100dvh] px-6 py-10">
       <AnimatedBackground />
 
       <div className="mb-8 flex items-center justify-between">
@@ -220,11 +230,22 @@ export default function OnboardingPage() {
               ))}
               {photos.length < 4 && (
                 <label className="flex aspect-square cursor-pointer items-center justify-center rounded-xl border border-dashed border-white/20 text-2xl text-white/40">
-                  +
-                  <input type="file" accept="image/*" className="hidden" onChange={handleFile} />
+                  {uploadingPhoto ? (
+                    <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/20 border-t-vibe-coral" />
+                  ) : (
+                    "+"
+                  )}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    disabled={uploadingPhoto}
+                    onChange={handleFile}
+                  />
                 </label>
               )}
             </div>
+            {photoError && <p className="mb-4 text-xs text-red-400">{photoError}</p>}
 
             <p className="mb-2 text-xs text-white/40">Or tap a demo avatar:</p>
             <div className="mb-8 flex flex-wrap gap-2">
@@ -280,49 +301,94 @@ export default function OnboardingPage() {
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -30 }}
           >
-            <h2 className="mb-1 font-display text-2xl font-bold">Give them something to reply to</h2>
-            <p className="mb-6 text-sm text-white/50">
-              Pick {PROMPT_COUNT} prompts. These show up on your card alongside your vibe score.
-            </p>
+            <div className="mb-6 flex items-center justify-between">
+              <p className="text-sm text-white/50">
+                Pick {PROMPT_COUNT} prompts. These show up on your card alongside your vibe score.
+              </p>
+              <span className="shrink-0 rounded-full bg-white/10 px-2.5 py-1 text-xs font-semibold text-white/70">
+                {prompts.filter((p) => p?.promptId && p.answer.trim()).length}/{PROMPT_COUNT}
+              </span>
+            </div>
             <div className="space-y-4">
               {Array.from({ length: PROMPT_COUNT }).map((_, i) => {
                 const current = prompts[i];
                 const takenIds = prompts.filter((_, j) => j !== i).map((p) => p.promptId);
+                const available = PROMPT_BANK.filter((p) => !takenIds.includes(p.id));
+                const answerLen = current?.answer?.length ?? 0;
                 return (
-                  <div key={i} className="rounded-2xl border border-white/10 bg-white/5 p-3">
-                    <select
-                      value={current?.promptId ?? ""}
-                      onChange={(e) => {
-                        const promptId = e.target.value;
-                        setPrompts((prev) => {
-                          const next = [...prev];
-                          next[i] = { promptId, answer: next[i]?.answer ?? "" };
-                          return next;
-                        });
-                      }}
-                      className="mb-2 w-full rounded-lg border border-white/10 bg-vibe-card px-3 py-2 text-sm outline-none focus:border-vibe-coral"
-                    >
-                      <option value="">Choose a prompt...</option>
-                      {PROMPT_BANK.filter((p) => !takenIds.includes(p.id)).map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.text}
-                        </option>
-                      ))}
-                    </select>
-                    <textarea
-                      value={current?.answer ?? ""}
-                      disabled={!current?.promptId}
-                      onChange={(e) => {
-                        setPrompts((prev) => {
-                          const next = [...prev];
-                          next[i] = { promptId: next[i]?.promptId ?? "", answer: e.target.value };
-                          return next;
-                        });
-                      }}
-                      rows={2}
-                      placeholder="Your answer..."
-                      className="w-full rounded-lg border border-white/10 bg-vibe-card px-3 py-2 text-sm outline-none focus:border-vibe-coral disabled:opacity-40"
-                    />
+                  <div key={i} className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                    {!current?.promptId ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => setOpenPromptSlot((s) => (s === i ? null : i))}
+                          className="flex w-full items-center justify-between text-left text-sm font-medium text-white/50"
+                        >
+                          <span>Choose a prompt...</span>
+                          <span className="text-vibe-coral">{openPromptSlot === i ? "Close" : "Browse"}</span>
+                        </button>
+                        {openPromptSlot === i && (
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            {available.map((p) => (
+                              <button
+                                key={p.id}
+                                type="button"
+                                onClick={() => {
+                                  setPrompts((prev) => {
+                                    const next = [...prev];
+                                    next[i] = { promptId: p.id, answer: next[i]?.answer ?? "" };
+                                    return next;
+                                  });
+                                  setOpenPromptSlot(null);
+                                }}
+                                className="rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-xs text-white/70"
+                              >
+                                {p.text}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <div className="mb-2 flex items-center justify-between gap-2">
+                          <p className="text-sm font-semibold text-white">{promptText(current.promptId)}</p>
+                          <button
+                            type="button"
+                            aria-label="Change prompt"
+                            onClick={() =>
+                              setPrompts((prev) => {
+                                const next = [...prev];
+                                next[i] = { promptId: "", answer: "" };
+                                return next;
+                              })
+                            }
+                            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white/10 text-white/50"
+                          >
+                            <IconX className="h-3 w-3" />
+                          </button>
+                        </div>
+                        <textarea
+                          value={current.answer}
+                          autoFocus
+                          maxLength={150}
+                          onChange={(e) => {
+                            setPrompts((prev) => {
+                              const next = [...prev];
+                              next[i] = { promptId: next[i]?.promptId ?? "", answer: e.target.value };
+                              return next;
+                            });
+                          }}
+                          rows={2}
+                          placeholder="Your answer..."
+                          className="w-full rounded-lg border border-white/10 bg-vibe-card px-3 py-2 text-sm outline-none focus:border-vibe-coral"
+                        />
+                        <div className="mt-1 flex items-center justify-end gap-1 text-[11px] text-white/30">
+                          {answerLen > 0 && <IconCheck className="h-3 w-3 text-vibe-coral" />}
+                          <span>{answerLen}/150</span>
+                        </div>
+                      </>
+                    )}
                   </div>
                 );
               })}

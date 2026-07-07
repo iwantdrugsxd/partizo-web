@@ -11,7 +11,7 @@ import { Report, UserProfile } from "@/lib/types";
 import { computeTrustScore } from "@/lib/trust";
 import { hashContact } from "@/lib/hash";
 import TagPicker from "@/components/TagPicker";
-import { IconShield } from "@/components/icons";
+import { IconImage, IconShield } from "@/components/icons";
 
 export default function ProfilePage() {
   const { user, refresh } = useAuth();
@@ -36,6 +36,8 @@ export default function ProfilePage() {
   const [reportsOpen, setReportsOpen] = useState(false);
   const [blockContact, setBlockContact] = useState("");
   const [blockContactBusy, setBlockContactBusy] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [photoError, setPhotoError] = useState("");
 
   useEffect(() => {
     if (!user) return;
@@ -137,6 +139,23 @@ export default function ProfilePage() {
     await refresh();
   }
 
+  async function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+    setUploadingPhoto(true);
+    setPhotoError("");
+    try {
+      const url = await dataProvider.uploadPhoto(user!.uid, file);
+      await dataProvider.updateProfile(user!.uid, { photos: [url, ...user!.photos.slice(1)] });
+      await refresh();
+    } catch {
+      setPhotoError("Couldn't upload that photo. Please try again.");
+    } finally {
+      setUploadingPhoto(false);
+    }
+  }
+
   async function unblock(id: string) {
     await dataProvider.updateProfile(user!.uid, {
       blockedUserIds: user!.blockedUserIds.filter((b) => b !== id),
@@ -159,9 +178,24 @@ export default function ProfilePage() {
       </div>
 
       <div className="mb-6 flex items-center gap-4">
-        <div className="relative h-20 w-20 overflow-hidden rounded-full border-2 border-vibe-coral">
+        <label className="relative h-20 w-20 shrink-0 cursor-pointer overflow-hidden rounded-full border-2 border-vibe-coral">
           {user.photos[0] && <Image src={user.photos[0]} alt="" fill className="object-cover" unoptimized />}
-        </div>
+          {uploadingPhoto && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+              <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+            </div>
+          )}
+          <div className="absolute bottom-0 right-0 flex h-6 w-6 items-center justify-center rounded-full border-2 border-vibe-ink bg-vibe-gradient">
+            <IconImage className="h-3 w-3 text-white" />
+          </div>
+          <input
+            type="file"
+            accept="image/*"
+            className="hidden"
+            disabled={uploadingPhoto}
+            onChange={handlePhotoChange}
+          />
+        </label>
         <div>
           <div className="flex items-center gap-2">
             <p className="font-display text-lg font-bold">
@@ -173,6 +207,7 @@ export default function ProfilePage() {
           <p className="mt-1 text-xs font-semibold text-vibe-orange">{user.personalityLabel}</p>
         </div>
       </div>
+      {photoError && <p className="mb-4 -mt-4 text-xs text-red-400">{photoError}</p>}
 
       {editing ? (
         <div className="mb-6 space-y-3">

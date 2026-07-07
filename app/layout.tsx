@@ -32,10 +32,10 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${display.variable} ${body.variable}`}>
-      <body className="font-body min-h-screen bg-vibe-ink">
+      <body className="font-body min-h-[100dvh] bg-vibe-ink">
         <SettingsProvider>
           <AuthProvider>
-            <div className="mx-auto min-h-screen max-w-md bg-vibe-ink shadow-2xl relative overflow-hidden">
+            <div className="relative mx-auto min-h-[100dvh] max-w-md overflow-hidden bg-vibe-ink shadow-2xl">
               {children}
             </div>
           </AuthProvider>

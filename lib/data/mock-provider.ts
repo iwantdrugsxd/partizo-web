@@ -220,6 +220,17 @@ export const mockProvider: DataProvider = {
     emit("auth");
   },
 
+  async uploadPhoto(_uidVal, file) {
+    // No real backend in mock mode - just read the file as a data URL, same as
+    // the app already did before real uploads existed.
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(file);
+    });
+  },
+
   async getDeck(uidVal, filters) {
     const db = loadDB();
     const me = db.users[uidVal];

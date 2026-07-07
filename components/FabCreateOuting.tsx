@@ -16,7 +16,8 @@ export default function FabCreateOuting() {
         whileHover={{ scale: 1.06 }}
         animate={{ boxShadow: ["0 0 0px rgba(255,92,122,0.5)", "0 0 24px rgba(255,92,122,0.6)", "0 0 0px rgba(255,92,122,0.5)"] }}
         transition={{ boxShadow: { duration: 2.5, repeat: Infinity } }}
-        className="absolute bottom-20 right-5 z-20 flex h-14 w-14 items-center justify-center rounded-full bg-vibe-gradient text-white"
+        style={{ bottom: "calc(5rem + env(safe-area-inset-bottom))" }}
+        className="absolute right-5 z-20 flex h-14 w-14 items-center justify-center rounded-full bg-vibe-gradient text-white"
         aria-label="Create outing"
       >
         <IconPlus className="h-6 w-6" />

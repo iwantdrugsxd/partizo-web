@@ -373,7 +373,7 @@ export default function ChatConversationPage() {
         </div>
       )}
 
-      <div className="flex items-center gap-2 border-t border-white/10 p-3">
+      <div className="flex items-center gap-2 border-t border-white/10 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
         <button onClick={pickDemoPhoto} aria-label="Send photo" className="shrink-0 text-white/50">
           <IconImage className="h-5 w-5" />
         </button>
