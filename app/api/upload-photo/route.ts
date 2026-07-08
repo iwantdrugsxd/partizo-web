@@ -44,6 +44,7 @@ export async function POST(req: NextRequest) {
       upsert: false,
     });
     if (error) {
+      console.error("[upload-photo] Supabase upload error:", error.message);
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
     const { data } = supabase.storage.from(PHOTOS_BUCKET).getPublicUrl(path);
