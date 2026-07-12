@@ -211,6 +211,11 @@ export default function ChatConversationPage() {
           <button onClick={() => router.back()} className="text-sm text-white/50">
             ←
           </button>
+          {chat?.type === "match" && otherMember?.photos[0] && (
+            <div className="relative h-8 w-8 shrink-0 overflow-hidden rounded-full border border-white/10">
+              <Image src={otherMember.photos[0]} alt="" fill className="object-cover" unoptimized />
+            </div>
+          )}
           <h1 className="font-display text-base font-bold">{chat?.title ?? "Chat"}</h1>
         </div>
         <div className="flex items-center gap-1">

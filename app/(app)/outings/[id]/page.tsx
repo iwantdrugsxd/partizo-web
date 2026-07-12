@@ -804,6 +804,9 @@ export default function OutingDetailPage() {
       {isMember && (
         <div className="mb-6 mt-6">
           <h2 className="mb-3 font-display text-sm font-bold">Photo album</h2>
+          {outing.photoAlbum.length === 0 && (
+            <p className="mb-2 text-xs text-white/40">No photos yet - add one from the outing to remember the vibe.</p>
+          )}
           <div className="grid grid-cols-4 gap-2">
             {outing.photoAlbum.map((url, i) => (
               <div key={i} className="relative aspect-square overflow-hidden rounded-xl border border-white/10">

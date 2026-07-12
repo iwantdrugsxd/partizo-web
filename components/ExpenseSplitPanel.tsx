@@ -59,7 +59,9 @@ export default function ExpenseSplitPanel({ outingId, myUid, members, expenses, 
           <p className="text-[11px] text-white/40">{netBalance >= 0 ? "You're owed this much" : "You owe this much"}</p>
         </div>
 
-        {expenses.length > 0 && (
+        {expenses.length === 0 ? (
+          <p className="mb-4 text-center text-xs text-white/40">No expenses yet - add the first one below.</p>
+        ) : (
           <div className="mb-4 space-y-2">
             {expenses.map((e) => {
               const payer = members.find((m) => m.uid === e.paidBy);

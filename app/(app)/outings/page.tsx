@@ -159,6 +159,7 @@ export default function OutingsPage() {
             key={o.id}
             outing={o}
             leaderName={users[o.leaderId]?.name}
+            leaderPhoto={users[o.leaderId]?.photos[0]}
             vibeScore={
               user && users[o.leaderId] && o.leaderId !== user.uid
                 ? computeVibeScore(user, users[o.leaderId])

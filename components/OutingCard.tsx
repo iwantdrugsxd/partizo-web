@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { format } from "date-fns";
 import { motion } from "framer-motion";
 import { Outing } from "@/lib/types";
@@ -9,10 +10,11 @@ import { IconMapPin, IconClock } from "@/components/icons";
 interface Props {
   outing: Outing;
   leaderName?: string;
+  leaderPhoto?: string;
   vibeScore?: number;
 }
 
-export default function OutingCard({ outing, leaderName, vibeScore }: Props) {
+export default function OutingCard({ outing, leaderName, leaderPhoto, vibeScore }: Props) {
   const guestSeats = outing.requests
     .filter((r) => r.status === "accepted" && outing.memberIds.includes(r.uid))
     .reduce((sum, r) => sum + (r.guestCount ?? 0), 0);
@@ -48,7 +50,12 @@ export default function OutingCard({ outing, leaderName, vibeScore }: Props) {
         </div>
 
         <div className="flex items-center justify-between">
-          <p className="text-xs text-white/40">
+          <p className="flex items-center gap-1.5 text-xs text-white/40">
+            {leaderName && leaderPhoto && (
+              <span className="relative h-4 w-4 shrink-0 overflow-hidden rounded-full border border-white/10">
+                <Image src={leaderPhoto} alt="" fill className="object-cover" unoptimized />
+              </span>
+            )}
             {leaderName ? `Hosted by ${leaderName} · ` : ""}
             {spotsLeft > 0 ? `${spotsLeft} spot${spotsLeft === 1 ? "" : "s"} left` : "Full"}
           </p>
